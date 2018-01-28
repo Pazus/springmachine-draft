@@ -27,10 +27,11 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Created by Pavel Kaplya on 17.01.2018.
+ * O - Managed object type
+ * S - states enum
+ * E - events enum
  */
-public abstract class PersistEnumStateMachineHandler<O, S extends Enum<S>, E extends Enum<E>> extends LifecycleObjectSupport {
-
-    public static final String OBJ_REFERENCE_HEADER_NAME = "OBJ_REFERENCE_HEADER_NAME";
+public abstract class AbstractContextAwareEnumStateMachineService<O, S extends Enum<S>, E extends Enum<E>> extends LifecycleObjectSupport {
 
     @Autowired
     private StateMachineFactory<S, E> stateMachineFactory;
@@ -38,8 +39,8 @@ public abstract class PersistEnumStateMachineHandler<O, S extends Enum<S>, E ext
     private final Field stateField;
     private final Class stateEnumClass;
 
-    private LoadingCache<O, StateMachine<S, E>> entityCache = configureCache().build(cacheLoader());
-    private Map<StateMachine<S, E>, O> invertedMap = new ConcurrentHashMap<>();
+    private final LoadingCache<O, StateMachine<S, E>> managedObjectsSMCache = configureCache().build(cacheLoader());
+    private final Map<StateMachine<S, E>, O> invertedMap = new ConcurrentHashMap<>();
 
     protected CacheBuilder<Object, Object> configureCache() {
         return CacheBuilder.newBuilder()
@@ -61,7 +62,7 @@ public abstract class PersistEnumStateMachineHandler<O, S extends Enum<S>, E ext
                     a.resetStateMachine(new DefaultStateMachineContext<>(state, null, null, null));
                 }
 
-                stateMachine.addStateListener(new EntityStateChangeStateMachineListenerAdapter(key));
+                stateMachine.addStateListener(new ObjectStateChangeListenerAdapter(key));
 
                 stateMachine.start();
                 invertedMap.put(stateMachine, key);
@@ -70,18 +71,18 @@ public abstract class PersistEnumStateMachineHandler<O, S extends Enum<S>, E ext
         };
     }
 
-    public PersistEnumStateMachineHandler() {
+    public AbstractContextAwareEnumStateMachineService() {
         super();
 
-        Class entityClazz = (Class) (((ParameterizedType) getClass().getGenericSuperclass()).getActualTypeArguments()[0]);
+        Class objectClazz = (Class) (((ParameterizedType) getClass().getGenericSuperclass()).getActualTypeArguments()[0]);
         stateEnumClass = (Class) (((ParameterizedType) getClass().getGenericSuperclass()).getActualTypeArguments()[1]);
 
-        List<Field> fields = FieldUtils.getFieldsListWithAnnotation(entityClazz/*.getClass()*/, StateField.class);
+        List<Field> fields = FieldUtils.getFieldsListWithAnnotation(objectClazz, StateField.class);
 
         if (fields.size() > 1)
-            throw new RuntimeException("Too many StateField fields in the entity " + entityClazz.getClass().getName());
+            throw new RuntimeException("Too many StateField fields in the object " + objectClazz.getName());
         else if (fields.isEmpty())
-            throw new RuntimeException("No StateField field found in the entity " + entityClazz.getClass().getName());
+            throw new RuntimeException("No StateField field found in the object " + objectClazz.getName());
         stateField = fields.get(0);
 
         if (stateField.getType() != stateEnumClass)
@@ -105,32 +106,31 @@ public abstract class PersistEnumStateMachineHandler<O, S extends Enum<S>, E ext
         }
     }
 
-    public boolean sendEvent(O entity, E event) {
-        StateMachine<S, E> stateMachine = entityCache.getUnchecked(entity);
+    public boolean sendEvent(O object, E event) {
+        StateMachine<S, E> stateMachine = managedObjectsSMCache.getUnchecked(object);
 
         try {
-            if (getState(entity) != null && stateMachine.getState().getId() != getState(entity))
-                throw new RuntimeException("Entity state mismatch");
+            if (getState(object) != null && stateMachine.getState().getId() != getState(object))
+                throw new RuntimeException("Object state mismatch");
         } catch (IllegalAccessException e) {
             throw new RuntimeException(e);
         }
 
         Message<E> message = MessageBuilder
                 .withPayload(event)
-                .setHeader(OBJ_REFERENCE_HEADER_NAME, entity)
                 .build();
         return stateMachine.sendEvent(message);
     }
 
-    public O getEntityByStateMachine(StateMachine<S, E> stateMachine) {
+    public O getManagedObjectByStateMachine(StateMachine<S, E> stateMachine) {
         return invertedMap.get(stateMachine);
     }
 
-    private class EntityStateChangeStateMachineListenerAdapter extends StateMachineListenerAdapter<S, E> {
+    private class ObjectStateChangeListenerAdapter extends StateMachineListenerAdapter<S, E> {
 
         private final O obj;
 
-        EntityStateChangeStateMachineListenerAdapter(O obj) {
+        ObjectStateChangeListenerAdapter(O obj) {
             this.obj = obj;
         }
 

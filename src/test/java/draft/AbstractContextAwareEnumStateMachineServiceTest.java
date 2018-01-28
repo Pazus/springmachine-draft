@@ -9,8 +9,8 @@ import org.springframework.statemachine.config.builders.StateMachineStateConfigu
 import org.springframework.statemachine.config.builders.StateMachineTransitionConfigurer;
 import org.springframework.stereotype.Service;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
-import draft.PersistEnumStateMachineHandlerTest.TestPersistEnumStateMachineHandler;
-import draft.PersistEnumStateMachineHandlerTest.TestStateMachineAdapter;
+import draft.AbstractContextAwareEnumStateMachineServiceTest.TestPersistEnumStateMachineHandler;
+import draft.AbstractContextAwareEnumStateMachineServiceTest.TestStateMachineAdapter;
 
 import java.util.EnumSet;
 
@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * Created by Pavel Kaplya on 19.01.2018.
  */
 @SpringJUnitConfig(classes = {TestPersistEnumStateMachineHandler.class, TestStateMachineAdapter.class})
-class PersistEnumStateMachineHandlerTest {
+class AbstractContextAwareEnumStateMachineServiceTest {
 
     @Autowired
     private TestPersistEnumStateMachineHandler fsmService;
@@ -46,7 +46,7 @@ class PersistEnumStateMachineHandlerTest {
     }
 
     @Service
-    static class TestPersistEnumStateMachineHandler extends PersistEnumStateMachineHandler<TestEntity, States, Events> {
+    static class TestPersistEnumStateMachineHandler extends AbstractContextAwareEnumStateMachineService<TestEntity, States, Events> {
 
     }
 
