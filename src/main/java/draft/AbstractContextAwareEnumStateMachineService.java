@@ -39,9 +39,16 @@ public abstract class AbstractContextAwareEnumStateMachineService<O, S extends E
     private final Field stateField;
     private final Class stateEnumClass;
 
+    /**
+     * Two maps containing links from object to SM and back.
+     * I'm concerned that equal method can lead to single SM associated with "diffferent" but equal objects
+     */
     private final LoadingCache<O, StateMachine<S, E>> managedObjectsSMCache = configureCache().build(cacheLoader());
     private final Map<StateMachine<S, E>, O> invertedMap = new ConcurrentHashMap<>();
 
+    /**
+     * protected predefined configuration for the cache
+     */
     protected CacheBuilder<Object, Object> configureCache() {
         return CacheBuilder.newBuilder()
                 .expireAfterWrite(10, TimeUnit.MINUTES)
@@ -50,6 +57,9 @@ public abstract class AbstractContextAwareEnumStateMachineService<O, S extends E
                 .maximumSize(100L);
     }
 
+    /**
+     * Loader that is invoked if the entry is missing in the cache for the requested key
+     */
     private CacheLoader<O, StateMachine<S, E>> cacheLoader() {
         return new CacheLoader<O, StateMachine<S, E>>() {
             @Override
@@ -106,6 +116,12 @@ public abstract class AbstractContextAwareEnumStateMachineService<O, S extends E
         }
     }
 
+    /**
+     * public service procedure to be called from the outside
+     * @param object
+     * @param event
+     * @return
+     */
     public boolean sendEvent(O object, E event) {
         StateMachine<S, E> stateMachine = managedObjectsSMCache.getUnchecked(object);
 
@@ -122,10 +138,18 @@ public abstract class AbstractContextAwareEnumStateMachineService<O, S extends E
         return stateMachine.sendEvent(message);
     }
 
-    public O getManagedObjectByStateMachine(StateMachine<S, E> stateMachine) {
+    /**
+     * method that is used by abstract methods(Actions/Guards) to get the managed object by the SM
+     * @param stateMachine
+     * @return
+     */
+    O getManagedObjectByStateMachine(StateMachine<S, E> stateMachine) {
         return invertedMap.get(stateMachine);
     }
 
+    /**
+     * Listener that executes the state change of the managed object
+     */
     private class ObjectStateChangeListenerAdapter extends StateMachineListenerAdapter<S, E> {
 
         private final O obj;
